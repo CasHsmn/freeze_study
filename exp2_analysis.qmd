@@ -1,0 +1,629 @@
+---
+title: "pilot_results"
+format:
+  html:
+    code-fold: true
+    cap-location: top
+    html-table-processing: none
+    toc: true
+---
+
+# Experiment 2 analysis
+
+2x2 between subjects design to test the effect of storage location and expiration date on freezing behaviour. Testing whether this is mediated by safety concern.
+
+-   H1: People are more likely to freeze beef straight from the store than from the fridge, regardless of expiration date
+-   H2: People are more likely to freeze beef far from expiration date than close to expiration date, regardless of location
+
+Perceived safety
+
+-   H3: The relationship of location on freezing likelihood is mediated by perceived safety
+-   H4: The relationship of expiration date on freezing likelihood is mediated by perceived safety
+
+Perceived freshness
+
+-   H5: The relationship of location on freezing likelihood is mediated by perceived freshness
+-   H6: The relationship of expiration date on freezing likelihood is mediated by perceived freshness
+
+```{mermaid}
+flowchart LR
+A[Storage location / expiration] -- H5/H6 --> B[Perceived Freshness]
+A -- H3/H4 --> C[Food safety risk perception]
+B --> E
+A -- H1/H2 --> E[Freezing likelihood]
+C --> E
+```
+
+
+```{r}
+#| label: read and initiate libraries
+#| include: false
+#| echo: false
+
+library(data.table)
+library(tidyr)
+library(tibble)
+library(careless)
+library(car)
+library(ggplot2)
+library(kableExtra)
+library(lme4)
+library(emmeans)
+library(lmerTest)
+library(table1)
+library(gtsummary)
+library(broom)
+library(broom.mixed)
+library(effectsize)
+library(interactions)
+library(mediation)
+library(WRS2)
+library(dplyr)
+library(psych)
+
+wd <- list()
+wd$data <-"C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/data/"
+wd$output <- "C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/output/"
+
+exp1 <- fread(paste0(wd$data, "freeze_exp1_20250714.csv")) # load value data
+
+df <- exp1 %>% 
+  filter(Status == 0 & Finished == 1 & att_check == 2) %>% 
+  mutate(across(11:ncol(.),as.numeric),
+         man_expiry = man_expiry - 5) %>% 
+  rowid_to_column(var = "id")
+
+df <- df %>% 
+  mutate(expiry = case_when(
+    !is.na(shop_today_1) ~ 1,
+    !is.na(fr_3_1)       ~ 2,
+    !is.na(shop_3_1)     ~ 2,
+    !is.na(fr_today_1)   ~ 1,
+    TRUE                 ~ NA_real_
+  )) %>% 
+  mutate(expiry = factor(expiry, levels = 1:2, labels = c("today", "3_days")))
+
+
+df <- df %>% 
+  mutate(location = case_when(
+    !is.na(shop_today_1) ~ 1,
+    !is.na(fr_3_1)       ~ 2,
+    !is.na(shop_3_1)     ~ 1,
+    !is.na(fr_today_1)   ~ 2,
+    TRUE                 ~ NA_real_
+  )) %>% 
+  mutate(location = factor(location, levels = 1:2, labels = c("shop", "fridge")))
+
+df <- df %>%
+  mutate(
+    lik_1 = coalesce(shop_today_1, fr_3_1, shop_3_1, fr_today_1),
+    lik_2 = coalesce(shop_today_2, fr_3_2, shop_3_2, fr_today_2),
+    lik_3 = coalesce(shop_today_3, fr_3_3, shop_3_3, fr_today_3),
+    lik_4 = coalesce(shop_today_4, fr_3_4, shop_3_4, fr_today_4),
+    lik_5 = coalesce(shop_today_5, fr_3_5, shop_3_5, fr_today_5),
+    st_per_risk = rowMeans(cbind(st_per_risk1_1, st_per_risk2_1), na.rm = TRUE),
+    f3_per_risk = rowMeans(cbind(f3_per_risk1_1, f3_per_risk2_1), na.rm = TRUE),
+    s3_per_risk = rowMeans(cbind(s3_per_risk1_1, s3_per_risk2_1), na.rm = TRUE),
+    ft_per_risk = rowMeans(cbind(ft_per_risk1_1, ft_per_risk2_1), na.rm = TRUE),
+    per_risk = coalesce(st_per_risk, f3_per_risk, s3_per_risk, ft_per_risk),
+    per_fresh = coalesce(st_per_fresh, f3_per_fresh, s3_per_fresh, ft_per_fresh)
+  )
+```
+
+## data quality checks
+
+1 respondent failed an attention check. 0 respondents removed for poor data quality.
+
+```{r}
+#| label: data quality
+#| eval: false
+#| include: false
+fail_att <- exp1 %>% # failed attention checks
+  filter(att_check == 1)
+
+# check intra-rater variability for behaviour questions. Inspect outliers (>1.5*|irv|)
+df$irv <- df %>% 
+  select(lik_1:lik_5) %>% 
+  irv()
+
+Q1 <- quantile(df$irv, 0.25, na.rm = TRUE)
+Q3 <- quantile(df$irv, 0.75, na.rm = TRUE)
+IQR_val <- Q3 - Q1
+
+lower_bound <- Q1 - 1.5 * IQR_val
+upper_bound <- Q3 + 1.5 * IQR_val
+
+df <- df %>%
+  mutate(irv_outlier = irv < lower_bound | irv > upper_bound)
+outlier_ids <- df$id[outliers]
+
+df$long <- df %>% 
+  select(lik_1:lik_5) %>% 
+  longstring()
+table(df$long) # 0 respondents gave the same answer on all 5 behaviour questions
+```
+
+## sample
+
+```{r}
+#| label: sample descriptives
+
+df <- df %>% 
+  mutate(
+    age = as.numeric(age),
+    adu = as.numeric(adu),
+    chi = as.numeric(chi),
+    inc = factor(inc, levels = c(1:10), labels = c("Less than $10,000", "$10,000 - $29,999", "$30,000 - $49,999", "$50,000 - $69,999", "$70,000 - $89,999", "$90,000 - $99,999", "$100,000 - $124,999", "$125,000 - $149,999", "$150,000 - $199,999", "$200,000 or more")),
+    edu = factor(edu, levels = c(1:9), labels = c("No formal education", "Less than a high school diploma", "High school graduate or equivalent (i.e. GED)", "Some college, but no degree", "Associate degree (i.e. AA, AS)", "Bachelor's degree (i.e. BA, AB, BS)", "Master's degree (i.e. MA, MS, MEng, etc.)", "Professional degree (i.e. MD, DDS, DVM, LLB, JD)", "Doctorate degree (i.e. PhD, EdD)")),
+    gender = factor(gender, levels = c(1:4), labels = c("male", "female", "non-binary", "prefer not to say"))
+  )
+table1(~ gender + age + adu + chi + edu + inc, data = df)
+```
+
+## Descriptives
+Correlations for the likelihood items are shown in @tbl-cor. Correlations should be low, as the answers are mutually exclusive. 
+```{r}
+#| echo: false
+#| label: tbl-cor
+#| tbl-cap: "Correlation table of likelihood measures"
+
+# sum_freeze <- df %>%
+#   group_by(expiry, location) %>%
+#   summarise(
+#     n = sum(!is.na(lik_1)),
+#     mean = mean(lik_1, na.rm = TRUE),
+#     sd = sd(lik_1, na.rm = TRUE),
+#     .groups = "drop"
+#   )
+# 
+# # Create bar chart with error bars
+# ggplot(sum_freeze, aes(x = expiry, y = mean, fill = location)) +
+#   geom_col(position = position_dodge(width = 0.9), width = 0.8) +
+#   labs(title = "Mean freezing likelihood by expiry and location",
+#        y = "Mean freezing likelihood")
+# 
+# sum_throw <- df %>%
+#   group_by(expiry, location) %>%
+#   summarise(
+#     n = sum(!is.na(lik_2)),
+#     mean = mean(lik_2, na.rm = TRUE),
+#     sd = sd(lik_2, na.rm = TRUE),
+#     .groups = "drop"
+#   )
+# 
+# # Create bar chart with error bars
+# ggplot(sum_throw, aes(x = expiry, y = mean, fill = location)) +
+#   geom_col(position = position_dodge(width = 0.9), width = 0.8) +
+#   labs(title = "Mean discarding likelihood by expiry and location",
+#        y = "Mean discarding likelihood")
+
+# all behaviour likelihoods
+facet_labels <- c(
+  lik_1 = "Freezing",
+  lik_2 = "Discarding",
+  lik_3 = "Cooking",
+  lik_4 = "Fridge",
+  lik_5 = "Share"
+)
+
+df %>% 
+  select(starts_with("lik_")) %>% 
+  cor() %>% 
+  kable(digits = 2, col.names = c("Freezing", "Discarding", "Cooking", "Fridge", "Share"), align = "c") %>%
+  kable_styling(full_width = F)
+```
+
+In @fig-lik, the means and SDs of the behaviour likelihood items are shown.
+The likelihood of freezing ground beef is overall very high in all conditions (ranging from 5.43 to 6.48)
+```{r}
+#| label: fig-lik
+#| fig-cap: "Bar chart of means and SD of each likelihood measure (rated 1-7)"
+
+long_lik <- df %>%
+  pivot_longer(
+    cols = starts_with("lik_"),
+    names_to = "lik_item",
+    values_to = "score"
+  )
+
+lik_summary <- long_lik %>%
+  group_by(expiry, location, lik_item) %>%
+  summarise(
+    n = sum(!is.na(score)),
+    mean = mean(score, na.rm = TRUE),
+    sd = sd(score, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(lik_summary, aes(x = expiry, y = mean, fill = location)) +
+  geom_col(position = position_dodge(width = 0.9), width = 0.8) +
+  facet_wrap(~ lik_item, ncol = 3, labeller = as_labeller(facet_labels))+
+  geom_errorbar(
+    aes(ymin = mean-sd, ymax = mean+sd),
+    position = position_dodge(width = 0.9),
+    width = 0.2,
+    linewidth = 0.6
+  )
+
+
+# ggsave(paste0(wd$output, "beh_int_summary.png"), width = 10, height = 7)
+```
+::: {.callout-note collapse="true" title="Click to see details"}
+```{r}
+lik_summary %>%
+  arrange(lik_item, expiry, location) %>%
+  kable(digits = 2, caption = "Means and SDs for Each Condition") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+```
+:::
+
+
+## Manipulation check
+
+There was a manipulation check for both the expiration date and storage location.
+**Expiration date**: Manipulation successful
+As shown in @tbl-man-ttest, meat expiring today is rated higher on the statement "The ground beef is close to expiry" than beef expiring in 3 days. The mean difference is only small. They also find the beef expiring in 3 days to be expiring soon.
+
+**Location**: Manipulation successful
+As shown in @tbl-man-chisq, people mostly correctly indicate when the beef was purchased.
+
+```{r}
+#| label: tbl-man-ttest
+#| tbl-cap: "T-test of expiration date manipulation check"
+t.test(man_expiry ~ expiry, data = df) |>
+  tidy() |>
+  select(estimate1, estimate2, estimate, statistic, p.value, parameter, conf.low, conf.high) |>
+  kable(
+    col.names = c(
+      "Mean (Today)", "Mean (3 Days)", "Mean Diff",
+      "t", "p", "df", "CI Lower", "CI Upper"
+    )
+  )
+```
+
+```{r}
+#| label: tbl-man-con
+#| tbl-cap: "contingency table"
+
+df$man_purchase <- factor(df$man_purchase, levels = c(1,2), labels = c("Bought today", "Not bought today"))
+kable(table(df$man_purchase, df$location), row.names = T) %>% kable_styling(full_width = F)
+```
+```{r}
+#| label: tbl-man-chisq
+#| tbl-cap: "Chi square test of location manipulation check"
+chisq.test(table(df$man_purchase, df$location)) %>%
+  tidy() %>%
+  select(!method) %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(col.names = c("χ²", "p", "df"), digits = 3, align = "c") %>% kable_styling(full_width = F)
+```
+
+# Analysis freezing likelihood
+see @tbl-anova for the main ANOVA of the factors expiry and location, predicting the likelihood of freezing the ground beef. 
+
+Effects are not as expected. Only the main effect for expiry is significant, storage location does not seem to play a role.
+
+```{r}
+#| label: tbl-anova
+#| tbl-cap: "ANOVA results of freezing likelihood predicted by location and expiry"
+
+# Freezing likelihood
+options(contrasts = c("contr.sum", "contr.poly"))
+aov <- aov(lik_1 ~ location*expiry, data = df)
+kable(Anova(aov, type = 3),
+      col.names = c("", "SS", "df", "F", "p"),
+      digits = 3,
+      align = "c")
+```
+
+::: {.callout-note collapse="true" title="Assumption check and robust test"}
+```{r}
+#| fig-cap: "QQ plot of ANOVA residuals"
+# check assumptions
+qqnorm(residuals(aov));qqline(residuals(aov)) #non-normal
+leveneTest(aov) %>% #homoscedascicity violated
+  tidy() %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, 
+        caption = "Levene's test", 
+        col.names = c("F", "p", "df", "df res"), 
+        align = "c") %>% 
+  kable_styling(full_width = F)
+
+# robust regression, trimmed means (20%)
+t2way(lik_1 ~ location*expiry, data = df)
+```
+:::
+
+While only expiry is significant, I still had a look at the pairwise comparisons to see if there's any interesting effects.
+
+@tbl-pairwise shows post-hoc pairwise comparisons and EMMeans are shown in @fig-emmean.
+This also does not show any potentially promising effects of storage location. 
+
+```{r}
+#| label: tbl-pairwise
+#| tbl-cap: "post-hoc pairwise comparisons"
+
+# post-hoc
+emm <- emmeans(aov, ~ location * expiry)
+kable(pairs(emm, adjust = "bonferroni"), digits = 3) %>% kable_styling(full_width = F)
+```
+```{r}
+#| fig-cap: "EMmeans plot freezing likelihood"
+#| label: fig-emmean
+ggplot(as.data.frame(emm), aes(x = expiry, y = emmean, group = location, color = location)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(
+    aes(ymin = emmean - SE, ymax = emmean + SE),
+    width = 0.15
+  ) +
+  ylim(5,7)
+```
+
+# discarding likelihood
+We also measured other behaviour likelihoods: likelihood of discarding, cooking, leaving it in the fridge and giving it to someone else.
+
+@tbl-aov-disc shows the ANOVA table predicting the likelihood to throw away the ground beef. 
+There is a significant main effect for location and expiry. People are more likely to discard meat from the fridge than from the shop, regardless of expiry date.
+```{r}
+#| tbl-cap: "ANOVA results of discarding likelihood predicted by location and expiry"
+#| label: tbl-aov-disc
+
+# Discarding likelihood
+aov_dis <- aov(lik_2 ~ location*expiry, data = df)
+kable(Anova(aov_dis, type = 3),
+      col.names = c("", "SS", "df", "F", "p"),
+      digits = 3,
+      align = "c")
+```
+
+
+::: {.callout-note collapse="true" title="Assumption check and robust test"}
+```{r}
+#| fig-cap: "QQ plot of ANOVA residuals"
+# check assumptions
+qqnorm(residuals(aov_dis));qqline(residuals(aov_dis)) #non-normal
+leveneTest(aov_dis) %>% #homoscedascicity violated
+  tidy() %>%
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, 
+        caption = "Levene's test", 
+        col.names = c("F", "p", "df", "df res"), 
+        align = "c") %>% 
+  kable_styling(full_width = F)
+
+# robust regression, trimmed means (20%)
+t2way(lik_2 ~ location*expiry, data = df)
+```
+:::
+
+When inspecting the posthoc comparisons (@tbl-disc-pair) and the EMMeans (@fig-disc-em), this shows that while on average the likelihood of throwing away is higher for meat stored in the fridge than from the store, this difference is only marginally significant for meat expiring today.
+```{r}
+#| label: tbl-disc-pair
+#| tbl-cap: "post-hoc pairwise comparisons"
+# post-hoc
+emm_throw <- emmeans(aov_dis, ~ location * expiry)
+kable(pairs(emm_throw, adjust = "bonferroni") , digits = 3) %>% kable_styling(full_width = F)
+```
+```{r}
+#| label: fig-disc-em
+#| fig-cap: "EMMeans plot discarding likelihood"
+ggplot(as.data.frame(emm_throw), aes(x = expiry, y = emmean, group = location, color = location)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(
+    aes(ymin = emmean - SE, ymax = emmean + SE),
+    width = 0.15
+  ) +
+  ylim(1,3)
+```
+
+
+### remove failed manipulation check
+To check whether inattentiveness may have anything to do with the results, I removed the people who answered the question about when the meat was purchased incorrectly (removed 46).
+
+Running the analysis on the remaining people (n = 255) does not change the results and still only expiry date remains significant, as shown in @tbl-aovedit.
+
+```{r}
+#| label: tbl-aovedit
+#| tbl-cap: "ANOVA results freezing likelihood by location and expiry, failed manipulation check removed"
+sub_man <- df %>%
+  filter((location == "shop" & man_purchase == "Bought today") |
+         (location == "fridge" & man_purchase == "Not bought today"))
+
+subaov <- aov(lik_1 ~ location*expiry, data = sub_man)
+kable(Anova(subaov, type = 3),
+      col.names = c("", "SS", "df", "F", "p"),
+      digits = 3,
+      align = "c")
+```
+
+# Mediation
+
+We are interested in the mediating effect of perceived food safety risk and perceived freshness. 
+
+@fig-barriskfresh-1 and @fig-barriskfresh-2 show the means of perceived food safety risk and perceived freshness in each condition.
+
+### Mediation for freezing likelihood
+```{r}
+#| label: fig-barriskfresh
+#| warning: false
+#| layout-ncol: 2
+#| fig-cap:
+#| - "perceived risk by location and expiry"
+#| - "perceived freshness by location and expiry"
+
+# descriptives
+ggplot(df, aes(x = location, y = per_risk, fill = expiry)) +
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(width = 1)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar",
+               position = position_dodge(width = 1), width = 0.2) +
+  labs(title = "Perceived Risk by Location and Expiry",
+       x = "Storage Location", y = "Perceived Risk") +
+  theme_minimal()
+
+ggplot(df, aes(x = location, y = per_fresh, fill = expiry)) +
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(width = 1)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar",
+               position = position_dodge(width = 1), width = 0.2) +
+  labs(title = "Perceived Freshness by Location and Expiry",
+       x = "Storage Location", y = "Perceived Freshness") +
+  theme_minimal()
+```
+
+The mediation analysis is shown in @tbl-med-5. This shows that the relationship of expiry on freezing likelihood is mediated by perceived food safety risk, as the Average Causal Mediation Effect (ACME) is significant.
+
+::: {.callout-note collapse="true" title="Individual path tests"}
+
+@tbl-med-1 shows that there is a significant main effect of expiry on perceived risk, but no other significant results.
+```{r}
+#| label: tbl-med-1
+#| tbl-cap: "ANOVA of perceived risk by location and expiry"
+#| warning: false
+
+# path a
+risk_path <- aov(per_risk ~ location*expiry, data = df)
+kable(Anova(risk_path, type = "3"), digits = 3, col.names = c("SS", "df", "F", "p")) %>% 
+  kable_styling(full_width = F)
+```
+@tbl-med-2 shows also a significant main effect of expiry on perceived freshness. 
+```{r}
+#| label: tbl-med-2
+#| tbl-cap: "ANOVA of perceived freshness by location and expiry"
+#| warning: false
+
+fresh_path <- aov(per_fresh ~ location*expiry, data = df)
+kable(Anova(fresh_path, type = "3"), digits = 3, col.names = c("SS", "df", "F", "p")) %>% 
+  kable_styling(full_width = F)
+```
+@tbl-med-3 shows that perceived risk significantly predicts the likelihood to freeze, as does perceived freshness (as shown in @tbl-med-4). 
+
+```{r}
+#| label: tbl-med-3
+#| tbl-cap: "Regression of freezing likelihood predicted by perceived risk"
+#| warning: false
+
+# path b
+risk_freeze <- lm(lik_1 ~ per_risk, data = df)
+risk_freeze %>% 
+  tidy() %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, col.names = c("term", "b", "SE", "t", "p"), align = "c") %>% 
+  kable_styling(full_width = F)
+```
+```{r}
+#| label: tbl-med-4
+#| tbl-cap: "Regression of freezing likelihood predicted by perceived freshness"
+#| warning: false
+
+fresh_freeze <- lm(lik_1 ~ per_fresh, data = df)
+fresh_freeze %>% 
+  tidy() %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, col.names = c("term", "b", "SE", "t", "p"), align = "c") %>% 
+  kable_styling(full_width = F)
+```
+:::
+```{r}
+#| label: tbl-med-5
+#| tbl-cap: "Mediation of risk on the effect between expiry and freezing likelihood"
+#| warning: false
+
+# mediation
+med_risk <- lm(per_risk ~ location + expiry, data = df)
+out_risk <- lm(lik_1 ~ location + expiry + per_risk, data = df)
+med_risk_result <- mediation::mediate(med_risk, out_risk,
+                      treat = "expiry", mediator = "per_risk",
+                      boot = TRUE, sims = 1000)
+tidy(med_risk_result)[-c(2, 4), ] %>%
+  mutate(term = case_when(
+    term == "acme_0" ~ "ACME",
+    term == "ade_0" ~ "ADE",
+    TRUE ~ term
+  ),
+  p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(
+    digits = 3,
+    col.names = c("Term","Estimate", "SE","p-value")
+  ) %>%
+  kable_styling(full_width = FALSE)
+```
+### Mediation for discarding likelihood
+As shown in @tbl-disc-3, the relationship between location and discarding likelihood is not mediated by perceived risk. Only the Average Direct Effect (ADE) is significant (direct effect of location on discard likelihood).
+
+@tbl-disc-4 shows that the effect is also not mediated by perceived freshness.
+
+::: {.callout-note collapse="true" title="Individual path tests"}
+@tbl-disc-1 shows that discarding likelihood is significantly predicted by the perceived risk.
+```{r}
+#| label: tbl-disc-1
+#| tbl-cap: "Regression of discarding likelihood predicted by perceived risk"
+#| warning: false
+
+# path b
+risk_disc <- lm(lik_2 ~ per_risk, data = df)
+risk_disc %>% 
+  tidy() %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, col.names = c("term", "b", "SE", "t", "p"), align = "c") %>% 
+  kable_styling(full_width = F)
+```
+@tbl-disc-1 shows that discarding likelihood is significantly predicted by the perceived freshness.
+```{r}
+#| label: tbl-disc-2
+#| tbl-cap: "Regression of discarding likelihood predicted by perceived freshness"
+#| warning: false
+
+fresh_disc <- lm(lik_2 ~ per_fresh, data = df)
+fresh_disc %>% 
+  tidy() %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "< .001", formatC(p.value, digits = 3, format = "f"))) %>%
+  kable(digits = 3, col.names = c("term", "b", "SE", "t", "p"), align = "c") %>% 
+  kable_styling(full_width = F)
+```
+:::
+```{r}
+#| label: tbl-disc-3
+#| tbl-cap: "Mediation analysis of perceived risk for discarding likelihood"
+#| warning: false
+
+med_risk_disc <- lm(per_risk ~ location + expiry, data = df)
+out_risk_disc <- lm(lik_2 ~ location + expiry + per_risk, data = df)
+med_risk_disc_result <- mediation::mediate(med_risk_disc, out_risk_disc,
+                      treat = "location", mediator = "per_risk",
+                      boot = TRUE, sims = 1000)
+tidy(med_risk_disc_result)[-c(2, 4), ] %>%
+  mutate(term = case_when(
+    term == "acme_0" ~ "ACME",
+    term == "ade_0" ~ "ADE",
+    TRUE ~ term
+  )) %>%
+  kable(
+    digits = 3,
+    col.names = c("Term","Estimate", "SE","p-value")
+  ) %>%
+  kable_styling(full_width = FALSE)
+```
+```{r}
+#| label: tbl-disc-4
+#| tbl-cap: "Mediation analysis of perceived freshness for discarding likelihood"
+#| warning: false
+
+med_risk_disc_f <- lm(per_fresh ~ location + expiry, data = df)
+out_risk_disc_f <- lm(lik_2 ~ location + expiry + per_fresh, data = df)
+med_fresh_disc_result <- mediation::mediate(med_risk_disc_f, out_risk_disc_f,
+                      treat = "location", mediator = "per_fresh",
+                      boot = TRUE, sims = 1000)
+tidy(med_fresh_disc_result)[-c(2, 4), ] %>%
+  mutate(term = case_when(
+    term == "acme_0" ~ "ACME",
+    term == "ade_0" ~ "ADE",
+    TRUE ~ term
+  )) %>%
+  kable(
+    digits = 3,
+    col.names = c("Term","Estimate", "SE","p-value")
+  ) %>%
+  kable_styling(full_width = FALSE)
+```

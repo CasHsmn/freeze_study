@@ -1,0 +1,502 @@
+---
+title: "pilot_results"
+format: html
+---
+
+```{r}
+#| label: read and initiate libraries
+#| include: false
+#| echo: false
+
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(careless)
+library(car)
+library(ggplot2)
+library(kableExtra)
+library(lme4)
+library(emmeans)
+library(lmerTest)
+library(table1)
+library(gtsummary)
+library(broom)
+library(broom.mixed)
+library(effectsize)
+
+wd <- list()
+wd$data <-"C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/data/"
+wd$output <- "C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/output/"
+
+# raw <- fread(paste0(wd$data, "freeze_pilot_2+May+2025_07.25.csv")) # load label data 
+raw <- fread(paste0(wd$data, "freeze_pilot_9+May+2025_11.16.csv")) # load value data
+
+df <- raw %>% 
+  filter(Status == 0 & Finished == 1 & Q20 == 1)
+
+likert_levels <- c(
+  "Strongly disagree",
+  "Disagree",
+  "Somewhat disagree",
+  "Neither agree nor disagree",
+  "Somewhat agree",
+  "Agree",
+  "Strongly agree"
+)
+```
+
+# Sample
+The sample has the following characteristics
+
+Only people are included who indicated on CloudResearch they do not have a special diet (vegetarian, flexitarian, etc.). People eat meat on average `{r} mean(df$meat_freq, na.rm = T)` days a week.
+
+
+```{r}
+#| label: sample characteristics
+#| echo: false
+#| warning: false
+
+mean(df$meat_freq, na.rm = T)
+sd(df$meat_freq, na.rm = T)
+
+df <- df %>% 
+  mutate(
+    across(starts_with("cap_"), ~ as.numeric(as.character(.))),
+    across(starts_with("opp_"), ~ as.numeric(as.character(.))),
+    across(starts_with("mot_"), ~ as.numeric(as.character(.))),
+    age = as.numeric(age),
+    adu = as.numeric(adu),
+    chi = as.numeric(chi),
+    inc = factor(inc, levels = c(1:12), labels = c("Less than $10,000", "$10,000 - $19,999", "$20,000 - $29,999", "$30,000 - $39,999", "$40,000 - $49,999", "$50,000 - $59,999", "$60,000 - $69,999", "$70,000 - $79,999", "$80,000 - $89,999", "$90,000 - $99,999", "$100,000 - $149,999", "$150,000 or more")),
+    edu = factor(edu, levels = c(1:9), labels = c("No formal education", "Less than a high school diploma", "High school graduate or equivalent (i.e. GED)", "Some college, but no degree", "Associate degree (i.e. AA, AS)", "Bachelor's degree (i.e. BA, AB, BS)", "Master's degree (i.e. MA, MS, MEng, etc.)", "Professional degree (i.e. MD, DDS, DVM, LLB, JD)", "Doctorate degree (i.e. PhD, EdD)")),
+    gender = factor(gender, levels = c(1:4), labels = c("male", "female", "non-binary", "prefer not to say")),
+    meat_freq = as.numeric(meat_freq) - 1,
+    cap_all = (cap_1+cap_2+cap_3+cap_4+cap_5+cap_6+cap_7)/7,
+    opp_all = (opp_1+opp_2+opp_3+opp_4)/4,
+    mot_all = (mot_1+mot_2+mot_3+mot_4+mot_5+mot_6)/6
+  )
+
+label(df$adu) <- "Number of adults"
+label(df$chi) <- "Number of children"
+label(df$edu) <- "Education"
+label(df$inc) <- "Income"
+
+table1(~ gender + age + adu + chi + edu + inc, data = df)
+
+df %>% 
+  count(meat_freq) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  ggplot(aes(x = meat_freq, y = percent)) +
+  geom_col(stat = "identity") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(0,7, by = 1)) +
+  labs(x = "Days", title = "On how many days per week do you eat meat on average?") +
+  ylim(0,50)
+```
+# Analysis
+
+- shop_today: bought today, expires today
+- shop_3: bought today, expiry 3 days
+- fr_today: bought before, expires today
+- fr_3: bought before, expiry 3 days
+
+There is a significant main effect from the repeated measures ANOVA.
+
+
+```{r}
+#| label: behaviour analysis
+#| echo: false
+#| warning: false
+
+bsubset <- df %>% 
+  dplyr::select(shop_today:fr_today, cap_all:mot_all, cap_1:cap_7, opp_1:opp_4, mot_1:mot_6) %>%
+  mutate(across(everything(), as.numeric)) %>% 
+  rowid_to_column(var = "id")
+
+kable(cor(bsubset[,2:5]), caption = "Correlation table of behaviour measures")
+
+long_bsub <- pivot_longer(bsubset, cols = 2:5, names_to = "behaviour", values_to = "score")
+summary_table <- long_bsub %>%
+  group_by(behaviour) %>%
+  summarise(
+    mean = round(mean(score, na.rm = TRUE), 2),
+    sd = round(sd(score, na.rm = TRUE), 2)
+  ) %>%
+  mutate(behaviour = case_when(
+    behaviour == "shop_3" ~ "Shop today: expires in 3 days",
+    behaviour == "shop_today" ~ "Shop today: expires today",
+    behaviour == "fr_3" ~ "Fridge 3 days: expires in 3 days",
+    behaviour == "fr_today" ~ "Fridge 3 days: expires today",
+    TRUE ~ as.character(behaviour)
+  ))
+
+long_bsub <- long_bsub %>%
+  mutate(
+    storage = case_when(
+      grepl("^fr", behaviour) ~ "fridge",
+      grepl("^shop", behaviour) ~ "shop"
+    ),
+    expiry = case_when(
+      grepl("3", behaviour) ~ "3_days",
+      grepl("today", behaviour) ~ "today"
+    ),
+    storage = factor(storage, levels = c("shop", "fridge")),
+    expiry = factor(expiry, levels = c("today", "3_days"))
+  )
+
+
+
+#ggplot(long_bsub, aes(x = score)) +
+#  geom_histogram()+
+#  facet_wrap(~ behaviour)
+
+#long_bsub %>%
+#  ggplot(aes(x = behaviour, y = score)) +
+#  stat_summary(fun = mean, geom = "bar", fill = "steelblue") +
+#  labs(title = "Mean Ratings by Behaviour", y = "Mean Rating", x = "Behaviour") +
+#  scale_y_continuous(breaks = seq(0,7, by = 1))+
+#  theme_minimal()
+
+kable(summary_table, caption = "Mean and Standard Deviation of Scores by Behaviour")
+#2x2 model
+options(contrasts = c("contr.treatment", "contr.poly")) # specify contr.sum for type II/III ANOVA, contr.treatment for regression
+
+factlmer <- lmer(score ~ storage*expiry + (1|id), data = long_bsub)
+summary(factlmer)
+tidy(factlmer, confint = T)
+kable(Anova(factlmer), caption = "ANOVA output")
+eta_squared(anova(factlmer), partial = F)
+cohens_f(factlmer)
+effectsize:f2(factlmer)
+# summary(beh_lmer)
+
+fact_stor <- emmeans(factlmer, pairwise ~ storage, adjust = "tukey")
+fact_exp <- emmeans(factlmer, pairwise ~ expiry, adjust = "tukey")
+#kable(fact_stor$contrasts, caption = "pairwise comparisons")
+#plot(fact_stor, main = "EMM plot with 95%CI")
+
+fact <- emmeans(factlmer, ~ expiry*storage, adjust = "tukey")
+factemdf <- as.data.frame(fact)
+factemdf$expiry <- factor(factemdf$expiry, levels = c("today", "3_days"), labels = c("expire_today", "expire_3days"))
+factemdf$storage <- factor(factemdf$storage, levels = c("fridge", "shop"), labels = c("fridge_3days", "shop_today"))
+
+ggplot(factemdf, aes(x = expiry, y = emmean, group = storage, color = storage)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.1) +
+  labs(title = "Estimated Marginal Means",
+       x = "Expiration", y = "Estimated Score",
+       color = "Storage duration") +
+  theme_minimal()
+
+ggplot(factemdf, aes(x = expiry, y = emmean, fill = storage)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), position = position_dodge(width = 0.8), width = 0.1) +
+  labs(title = "Estimated Marginal Means by Storage and Expiry",
+       x = "Expiration",
+       y = "Estimated Mean Score",
+       fill = "Storage duration") +
+  theme_minimal()
+
+# add COM
+lmermot <- lmer(score ~ storage*expiry*mot_all + (1|id), data = long_bsub)
+Anova(lmermot)
+summary(lmercom)
+
+lmercap <- lmer(score ~ storage*expiry*cap_all + (1|id), data = long_bsub)
+Anova(lmercap)
+summary(lmercap)
+lmeropp <- lmer(score ~ storage*expiry*opp_all + (1|id), data = long_bsub)
+Anova(lmeropp)
+```
+
+# behaviour frequencies
+mean frequencies (1 (almost) never - 5 very often) for behaviours:
+
+1. How often do you eat beef that was frozen at home?
+2. How often does beef go unused before it reaches its expiry date?
+3. How often do you find beef in the freezer that you have to throw out?
+```{r}
+#| echo: false
+behf_long <- df %>% 
+  pivot_longer(cols = starts_with("beh_use"),
+               names_to = "behaviour",
+               values_to = "frequency") %>%
+  mutate(
+    frequency = factor(frequency),
+    behaviour = case_when(
+      behaviour == "beh_use_1" ~ "How often do you eat beef that was frozen at home?",
+      behaviour == "beh_use_2" ~ "How often does beef go unused before it reaches its expiry date?",
+      behaviour == "beh_use_3" ~ "How often do you find beef in the freezer that you have to throw out?",
+      TRUE ~ behaviour
+    )
+  ) %>% 
+  select(behaviour, frequency)
+
+behf_long %>%
+  group_by(behaviour) %>%
+  summarise(
+    mean = round(mean(as.numeric(frequency), na.rm = TRUE), 2),
+    sd = round(sd(as.numeric(frequency), na.rm = TRUE), 2),
+    n = n()
+  ) %>%
+  kable(caption = "Summary of Reported Beef-Related Behaviours")
+
+
+#table(df$beh_use_1)
+#table(df$beh_use_2)
+#table(df$beh_use_3)
+```
+
+# COM-B determinants
+
+## Capabilities
+
+```{r}
+#| label: capability
+#| echo: false
+#| warning: false
+
+likert_levels <- as.character(1:7)
+cap <- df %>% 
+  select(starts_with("cap"), -cap_8, -cap_7, -cap_all)# %>% 
+  mutate(across(everything(), ~ factor(.x, levels = likert_levels, ordered = TRUE)))
+ 
+cap %>% 
+  mutate_all(as.integer) %>% 
+  cor() %>% 
+  round(2)
+
+alphacap <- cap %>% 
+  mutate_all(as.numeric) %>% 
+  psych::alpha(check.keys = T)
+
+alphacap$total
+
+long_bsub %>% 
+  select(cap_1:cap_7, score) %>% 
+  cor() %>% 
+  kable(digits = 2)
+
+cap_long <- cap %>%
+  pivot_longer(cols = starts_with("cap_"),
+               names_to = "item",
+               values_to = "response")
+
+cap_long %>%
+  mutate(item = case_when(
+    item == "cap_1" ~ "Concerned about safety",
+    item == "cap_2" ~ "Safe until use-by date",
+    item == "cap_3" ~ "Distrust frozen beef over time",
+    item == "cap_4" ~ "Frozen beef tastes worse",
+    item == "cap_5" ~ "Know how to freeze well",
+    item == "cap_6" ~ "Identify unsafe frozen beef",
+    item == "cap_7" ~ "Plan beef usage"
+  )) %>%
+  group_by(item) %>%
+  summarise(mean_response = mean(as.numeric(response), na.rm = TRUE),
+            sd_resp = sd(as.numeric(response), na.rm = T)) %>%
+  ggplot(aes(x = item, y = mean_response)) +
+  geom_col(fill = "darkorange") +
+  labs(title = "Mean Response per Capability Item",
+       x = "Capability Item", y = "Mean Response") +
+  theme_minimal() +
+  ylim(0,7) +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+# inferential explorative
+long_bsub$cap_1_c <- scale(long_bsub$cap_1, center = TRUE, scale = FALSE)
+cap1lm <- lmer(score ~ cap_1*storage*expiry + (1|id), data = long_bsub) # safety, sig. p=.007. Increasing concern = lower likelihood
+summary(cap1lm)
+kable(Anova(cap1lm))
+emmip(cap1lm, storage ~ expiry | cap_1, cov.reduce = range)
+interact_plot(
+  model = cap1lm,
+  pred = expiry,        # moderator
+  modx = storage,        # one manipulated variable
+  mod2 = cap_1,         # the other manipulated variable
+  plot.points = TRUE,    # show data points (optional)
+  interval = TRUE,       # include confidence intervals
+  partial.residuals = FALSE
+)
+interact_plot(
+  cap1lm,
+  pred = cap_1,    # continuous moderator = x-axis
+  modx = storage,    # separate lines
+  mod2 = expiry,     # facets
+)
+probe_interaction(cap1lm, pred = expiry, modx = storage, mod2 = cap_1)
+
+cap2lm <- lmer(score ~ cap_2*storage*expiry + (1|id), data = long_bsub) # knowledge freeze until use-by, sig. p=.01. Increasing knowledge = increased likelihood
+Anova(cap2lm)
+summary(cap2lm)
+interact_plot(
+  cap2lm,
+  pred = cap_2,    # continuous moderator = x-axis
+  modx = storage,    # separate lines
+  mod2 = expiry,     # facets
+)
+
+cap3lm <- lmer(score ~ cap_3 + storage*expiry + (1|id), data = long_bsub) # distrust frozen, sig. p=.03. Increasing distrist = lower likelihood
+summary(cap3lm)
+cap4lm <- lmer(score ~ cap_4 + storage*expiry + (1|id), data = long_bsub) # worse taste, n.sig. p=.55
+summary(cap4lm)
+cap5lm <- lmer(score ~ cap_5 + storage*expiry + (1|id), data = long_bsub) # freezing know-how, n.sig. p=.09
+summary(cap5lm)
+cap6lm <- lmer(score ~ cap_6 + storage*expiry + (1|id), data = long_bsub) # efficacy identify safe frozen, sig. p=.02. Increased efficacy = increased likelihood
+summary(cap6lm)
+cap7lm <- lmer(score ~ cap_7 + storage*expiry + (1|id), data = long_bsub) # planning to use, n.sig. p=.72
+summary(cap7lm)
+```
+
+## Opportunity
+
+```{r}
+#| label: opportunity
+#| echo: false
+
+opp <- df %>% 
+  select(starts_with("opp")) %>% 
+  mutate(across(everything(), ~ factor(.x, levels = likert_levels, ordered = TRUE)))
+ 
+opp %>% 
+  mutate_all(as.integer) %>% 
+  cor(use = "pairwise.complete.obs") %>% 
+  round(2)
+
+alphaopp <- opp %>% 
+  mutate_all(as.numeric) %>% 
+  psych::alpha(check.keys = T)
+
+alphaopp$total
+
+long_bsub %>% 
+  select(opp_1:opp_4, score) %>% 
+  cor() %>% 
+  kable(digits = 2)
+
+opp_long <- opp %>%
+  pivot_longer(cols = starts_with("opp_"),
+               names_to = "item",
+               values_to = "response")
+
+opp_long %>%
+  mutate(item = case_when(
+    item == "opp_1" ~ "Sufficient freezer space",
+    item == "opp_2" ~ "Freezing fits routine",
+    item == "opp_3" ~ "Freezing common among friends/family",
+    item == "opp_4" ~ "Comfortable serving frozen beef"
+  )) %>%
+  group_by(item) %>%
+  summarise(mean_response = mean(as.numeric(response), na.rm = TRUE),
+            sd_resp = sd(as.numeric(response), na.rm = T)) %>%
+  ggplot(aes(x = item, y = mean_response)) +
+  geom_col(fill = "darkorange") +
+  labs(title = "Mean Response per Opportunity Item",
+       x = "Opportunity Item", y = "Mean Response") +
+  theme_minimal() +
+  ylim(0,7) +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+# inferential explorative
+opp1lm <- lmer(score ~ opp_1 + storage*expiry + (1|id), data = long_bsub) # sufficients space, sig. p=.006 increased space = increased likelihood
+summary(opp1lm)
+
+opp2lm <- lmer(score ~ opp_2 + storage*expiry + (1|id), data = long_bsub) # fits routine, sig. p=.01 better fit = increased likelihood
+summary(opp2lm)
+
+opp3lm <- lmer(score ~ opp_3 + storage*expiry + (1|id), data = long_bsub) # descriptive norm, n.sig. p=.09
+summary(opp3lm)
+
+opp4lm <- lmer(score ~ opp_4 + storage*expiry + (1|id), data = long_bsub) # serve frozen to guests, sig. p=.009, more comfortable = increased likelihood
+summary(opp4lm)
+
+```
+
+## Motivation
+
+```{r}
+#| label: motivation
+#| echo: false
+
+
+mot <- df %>% 
+  select(starts_with("mot")) %>% 
+  mutate(across(everything(), ~ factor(.x, levels = likert_levels, ordered = TRUE)))
+ 
+mot %>% 
+  mutate_all(as.integer) %>% 
+  cor(use = "pairwise.complete.obs") %>% 
+  round(2)
+
+alphamot <- mot %>% 
+  mutate_all(as.numeric) %>% 
+  psych::alpha(check.keys = T)
+
+alphamot$total
+
+long_bsub %>% 
+  select(mot_1:mot_6, score) %>% 
+  cor() %>% 
+  kable(digits = 2)
+
+mot_long <- mot %>%
+  pivot_longer(cols = starts_with("mot_"),
+               names_to = "item",
+               values_to = "response")
+
+mot_long %>%
+  mutate(item = case_when(
+    item == "mot_1" ~ "Throw away less beef by freezing",
+    item == "mot_2" ~ "Freezing beef is easy",
+    item == "mot_3" ~ "Intend to freeze beef from supermarket",
+    item == "mot_4" ~ "Intend to freeze beef I won’t use in time",
+    item == "mot_5" ~ "Freeze supermarket beef automatically",
+    item == "mot_6" ~ "Freeze unused beef automatically"
+  )) %>%
+  group_by(item) %>%
+  summarise(mean_response = mean(as.numeric(response), na.rm = TRUE),
+            sd_resp = sd(as.numeric(response), na.rm = T)) %>%
+  ggplot(aes(x = item, y = mean_response)) +
+  geom_col(fill = "darkorange") +
+  labs(title = "Mean Response per Motivation Item",
+       x = "Motivation Item", y = "Mean Response") +
+  theme_minimal() +
+  ylim(0,7) +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+# explorative inferential
+mot1lm <- lmer(score ~ mot_1 + storage*expiry + (1|id), data = long_bsub) # belief it reduces waste, sig. p<.001, increased belief = increased likelihood
+summary(mot1lm)
+mot2lm <- lmer(score ~ mot_2 + storage*expiry + (1|id), data = long_bsub) # freezing efficacy, sig. p<.001, increased efficacy (ease) = increased likelihood
+summary(mot2lm)
+mot3lm <- lmer(score ~ mot_3 + storage*expiry + (1|id), data = long_bsub) # freeze from supermarket intent, n.sig. p=.48
+summary(mot3lm)
+mot4lm <- lmer(score ~ mot_4 + storage*expiry + (1|id), data = long_bsub) # freeze unused intent, sig. p<.001, increased intent = increased likelihood
+summary(mot4lm)
+mot5lm <- lmer(score ~ mot_5 + storage*expiry + (1|id), data = long_bsub) # freeze from supermarket habit, n.sig. p=.17
+summary(mot5lm)
+mot6lm <- lmer(score ~ mot_6 + storage*expiry + (1|id), data = long_bsub) # freeze unused habit, sig. p<.001, increased habit = increased likelihood
+summary(mot6lm)
+```
+Answers to: "What is the maximum amount of time beef can be kept in the freezer and still be safe to eat?"
+
+correct answer is indefinitely
+```{r} 
+# Create a factor with new labels replacing 1-5
+df$Q26_factor <- factor(df$Q26, levels = 1:5,
+  labels = c(
+    "Less than 1 month",
+    "1-2 months",
+    "3-6 months",
+    "1 year",
+    "Indefinitely"
+  )
+)
+
+table(df$Q26_factor)
+table(df$cap_2)
+
+```
+
