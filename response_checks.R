@@ -33,3 +33,6 @@ cor(careless_subset[,8:11])
 cor(careless_subset[,12:17])
 
 table(df$meat_freq)
+
+
+HCPC(pcadf)

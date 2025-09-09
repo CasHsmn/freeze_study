@@ -6,6 +6,7 @@ format:
     cap-location: top
     html-table-processing: none
     toc: true
+    number-sections: true
 ---
 
 # Experiment 2 analysis
@@ -60,6 +61,8 @@ library(mediation)
 library(WRS2)
 library(dplyr)
 library(psych)
+library(FactoMineR)
+library(factoextra)
 
 wd <- list()
 wd$data <-"C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/data/"
@@ -476,6 +479,8 @@ The mediation analysis is shown in @tbl-med-5. This shows that the relationship 
 
 ::: {.callout-note collapse="true" title="Individual path tests"}
 
+Perceived risk and perceived freshness are not affected by location, only expiration.
+
 @tbl-med-1 shows that there is a significant main effect of expiry on perceived risk, but no other significant results.
 ```{r}
 #| label: tbl-med-1
@@ -627,3 +632,70 @@ tidy(med_fresh_disc_result)[-c(2, 4), ] %>%
   ) %>%
   kable_styling(full_width = FALSE)
 ```
+
+# Clustering
+Clustered the participants from the expiry = today condition (n = 150)
+
+From PCA, the first dimension is one of freezing (lik_1) vs. discarding (lik_2), and then there's everything else. 
+
+Using Hierarchical Clustering on Principal Components with 3 clusters, which is statistically the best solution.
+
+1. These people mainly focus on freezing, with a bit of cooking (n = 68)
+2. These people use more strategies: freezing, cooking and fridge. Though fridge isn't very helpful (n = 53)
+3. These people do not freeze (as much). They are more likely to discard (n = 30)
+```{r}
+#| label: "clustering"
+#| warning: false
+df_clust <- df %>% 
+    filter(expiry == "today" ) %>% 
+  select(lik_1:lik_5, edu, gender, inc, chi, adu, age)
+
+pcadf <- FactoMineR::PCA(df_clust[, c("lik_1", "lik_2", "lik_3", "lik_4", "lik_5")])
+hcpcdf <- HCPC(pcadf, nb.clust = 3, graph = F)
+
+df_clust$cluster <- hcpcdf$data.clust$clust
+df_clust$cluster <- factor(df_clust$cluster)
+
+fviz_cluster(hcpcdf)
+
+kable(aggregate(df_clust[, c("lik_1", "lik_2", "lik_3", "lik_4", "lik_5")], 
+          by = list(cluster = df_clust$cluster), FUN = mean), caption = "Mean behaviour likelihood scores by cluster", col.names = c("Cluster", "Freezing", "Discarding", "Cooking", "Fridge", "Share"), digits = 2)
+kable(table(df_clust$cluster), caption = "Cluster sizes", col.names = c("Cluster", "n"))
+
+aov_freezecluster <- aov(lik_1 ~ cluster, data = df_clust)
+kable(tidy(aov_freezecluster), caption = "ANOVA of freezing likelihood predicted by cluster", digits = 2)
+
+ph_freeze <- TukeyHSD(aov_freezecluster)
+kable(tidy(ph_freeze), caption = "post hoc Tukey freezing likelihood", digits = 2)
+
+aov_discardcluster <- aov(lik_2 ~ cluster, data = df_clust)
+kable(tidy(aov_discardcluster), caption = "ANOVA of discarding likelihood predicted by cluster", digits = 2)
+
+ph_discard <- TukeyHSD(aov_discardcluster)
+kable(tidy(ph_discard), caption = "post hoc Tukey discard likelihood", digits = 2)
+```
+Mainly cluster 3 freezes less and discards more than the other two clusters. 
+
+### Defining clusters
+
+I cannot figure out if cluster 3 is a specific targetable group. There are no significant demographics
+```{r}
+#| warning: false
+
+
+df_clust <- df_clust %>% 
+  mutate(
+    gender = factor(gender),
+    inc = factor(inc),
+    edu = factor(edu)
+  )
+kable(tidy(chisq.test(table(df_clust$cluster, df_clust$gender))), caption = "Gender")
+kable(tidy(aov(age ~ cluster, data = df_clust)), caption = "Age")
+kable(tidy(chisq.test(table(df_clust$cluster, df_clust$inc))), caption = "Income")
+kable(tidy(chisq.test(table(df_clust$cluster, df_clust$edu))), caption = "Education")
+kable(tidy(aov(chi ~ cluster, data = df_clust)), caption = "Number of children")
+kable(tidy(aov(adu ~ cluster, data = df_clust)), caption = "Number of adults")
+```
+
+
+
