@@ -105,7 +105,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#mediation-for-freezing-likelihood" id="toc-mediation-for-freezing-likelihood" class="nav-link" data-scroll-target="#mediation-for-freezing-likelihood"><span class="header-section-number">4.0.1</span> Mediation for freezing likelihood</a></li>
   <li><a href="#mediation-for-discarding-likelihood" id="toc-mediation-for-discarding-likelihood" class="nav-link" data-scroll-target="#mediation-for-discarding-likelihood"><span class="header-section-number">4.0.2</span> Mediation for discarding likelihood</a></li>
   </ul></li>
-  <li><a href="#clustering" id="toc-clustering" class="nav-link" data-scroll-target="#clustering"><span class="header-section-number">5</span> Clustering</a></li>
+  <li><a href="#clustering" id="toc-clustering" class="nav-link" data-scroll-target="#clustering"><span class="header-section-number">5</span> Clustering</a>
+  <ul class="collapse">
+  <li><a href="#defining-clusters" id="toc-defining-clusters" class="nav-link" data-scroll-target="#defining-clusters"><span class="header-section-number">5.0.1</span> Defining clusters</a></li>
+  <li><a href="#alternative-k-means-clustering" id="toc-alternative-k-means-clustering" class="nav-link" data-scroll-target="#alternative-k-means-clustering"><span class="header-section-number">5.1</span> alternative k-means clustering</a></li>
+  </ul></li>
   </ul>
 </nav>
 </div>
@@ -1797,13 +1801,13 @@ Table&nbsp;14: Mediation of risk on the effect between expiry and freezing likel
   <tr>
    <td style="text-align:left;"> ACME </td>
    <td style="text-align:right;"> 0.223 </td>
-   <td style="text-align:right;"> 0.082 </td>
+   <td style="text-align:right;"> 0.081 </td>
    <td style="text-align:left;"> &lt; .001 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> ADE </td>
    <td style="text-align:right;"> 0.577 </td>
-   <td style="text-align:right;"> 0.175 </td>
+   <td style="text-align:right;"> 0.170 </td>
    <td style="text-align:left;"> &lt; .001 </td>
   </tr>
 </tbody>
@@ -1977,14 +1981,14 @@ Table&nbsp;17: Mediation analysis of perceived risk for discarding likelihood
   <tr>
    <td style="text-align:left;"> ACME </td>
    <td style="text-align:right;"> -0.043 </td>
-   <td style="text-align:right;"> 0.100 </td>
-   <td style="text-align:right;"> 0.63 </td>
+   <td style="text-align:right;"> 0.107 </td>
+   <td style="text-align:right;"> 0.636 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> ADE </td>
    <td style="text-align:right;"> 0.470 </td>
-   <td style="text-align:right;"> 0.148 </td>
-   <td style="text-align:right;"> 0.00 </td>
+   <td style="text-align:right;"> 0.145 </td>
+   <td style="text-align:right;"> 0.002 </td>
   </tr>
 </tbody>
 </table>
@@ -2034,14 +2038,14 @@ Table&nbsp;18: Mediation analysis of perceived freshness for discarding likeliho
   <tr>
    <td style="text-align:left;"> ACME </td>
    <td style="text-align:right;"> -0.073 </td>
-   <td style="text-align:right;"> 0.063 </td>
-   <td style="text-align:right;"> 0.214 </td>
+   <td style="text-align:right;"> 0.062 </td>
+   <td style="text-align:right;"> 0.188 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> ADE </td>
    <td style="text-align:right;"> 0.504 </td>
    <td style="text-align:right;"> 0.172 </td>
-   <td style="text-align:right;"> 0.004 </td>
+   <td style="text-align:right;"> 0.002 </td>
   </tr>
 </tbody>
 </table>
@@ -2068,9 +2072,12 @@ Table&nbsp;18: Mediation analysis of perceived freshness for discarding likeliho
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>df_clust <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> </span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(expiry <span class="sc">==</span> <span class="st">"today"</span> ) <span class="sc">%&gt;%</span> </span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(lik_1<span class="sc">:</span>lik_5, edu, gender, inc, chi, adu, age)</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(lik_1<span class="sc">:</span>lik_5, edu, gender, inc, chi, adu, age, meat_freq, man_expiry)</span>
 <span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>pcadf <span class="ot">&lt;-</span> FactoMineR<span class="sc">::</span><span class="fu">PCA</span>(df_clust[, <span class="fu">c</span>(<span class="st">"lik_1"</span>, <span class="st">"lik_2"</span>, <span class="st">"lik_3"</span>, <span class="st">"lik_4"</span>, <span class="st">"lik_5"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>subset_expiry <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> </span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(expiry  <span class="sc">==</span> <span class="st">"today"</span>)</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>pcadf <span class="ot">&lt;-</span> FactoMineR<span class="sc">::</span><span class="fu">PCA</span>(df_clust[, <span class="fu">c</span>(<span class="st">"lik_1"</span>, <span class="st">"lik_2"</span>, <span class="st">"lik_3"</span>, <span class="st">"lik_4"</span>, <span class="st">"lik_5"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -2090,10 +2097,11 @@ Table&nbsp;18: Mediation analysis of perceived freshness for discarding likeliho
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>hcpcdf <span class="ot">&lt;-</span> <span class="fu">HCPC</span>(pcadf, <span class="at">nb.clust =</span> <span class="dv">3</span>, <span class="at">graph =</span> F)</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>df_clust<span class="sc">$</span>cluster <span class="ot">&lt;-</span> hcpcdf<span class="sc">$</span>data.clust<span class="sc">$</span>clust</span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>df_clust<span class="sc">$</span>cluster <span class="ot">&lt;-</span> <span class="fu">factor</span>(df_clust<span class="sc">$</span>cluster)</span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="fu">fviz_cluster</span>(hcpcdf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>df_clust<span class="sc">$</span>cluster <span class="ot">&lt;-</span> <span class="fu">factor</span>(hcpcdf<span class="sc">$</span>data.clust<span class="sc">$</span>clust)</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>subset_expiry<span class="sc">$</span>cluster <span class="ot">&lt;-</span> <span class="fu">factor</span>(hcpcdf<span class="sc">$</span>data.clust<span class="sc">$</span>clust)</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a><span class="co">#df[expiry == "today",]$cluster &lt;- hcpcdf$data.clust$clust</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a><span class="fu">fviz_cluster</span>(hcpcdf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -2373,6 +2381,10 @@ Table&nbsp;18: Mediation analysis of perceived freshness for discarding likeliho
 </div>
 </div>
 <p>Mainly cluster 3 freezes less and discards more than the other two clusters.</p>
+<section id="defining-clusters" class="level3" data-number="5.0.1">
+<h3 data-number="5.0.1" class="anchored" data-anchor-id="defining-clusters"><span class="header-section-number">5.0.1</span> Defining clusters</h3>
+<section id="socio-demographics" class="level4" data-number="5.0.1.1">
+<h4 data-number="5.0.1.1" class="anchored" data-anchor-id="socio-demographics"><span class="header-section-number">5.0.1.1</span> Socio-demographics</h4>
 <p>I cannot figure out if cluster 3 is a specific targetable group. There are no significant demographics</p>
 <div class="cell">
 <details class="code-fold">
@@ -2383,14 +2395,11 @@ Table&nbsp;18: Mediation analysis of perceived freshness for discarding likeliho
 <span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">inc =</span> <span class="fu">factor</span>(inc),</span>
 <span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">edu =</span> <span class="fu">factor</span>(edu)</span>
 <span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>gender))))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>gender))), <span class="at">caption =</span> <span class="st">"Gender"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-<div class="cell-output cell-output-stderr">
-<pre><code>Warning in chisq.test(table(df_clust$cluster, df_clust$gender)): Chi-squared
-approximation may be incorrect</code></pre>
-</div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Gender</caption>
 <thead>
 <tr class="header">
 <th style="text-align: right;">statistic</th>
@@ -2411,10 +2420,11 @@ approximation may be incorrect</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(age <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(age <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)), <span class="at">caption =</span> <span class="st">"Age"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Age</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">term</th>
@@ -2447,14 +2457,11 @@ approximation may be incorrect</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>inc))))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>inc))), <span class="at">caption =</span> <span class="st">"Income"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-<div class="cell-output cell-output-stderr">
-<pre><code>Warning in chisq.test(table(df_clust$cluster, df_clust$inc)): Chi-squared
-approximation may be incorrect</code></pre>
-</div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Income</caption>
 <thead>
 <tr class="header">
 <th style="text-align: right;">statistic</th>
@@ -2475,14 +2482,11 @@ approximation may be incorrect</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>edu))))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">chisq.test</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>cluster, df_clust<span class="sc">$</span>edu))), <span class="at">caption =</span> <span class="st">"Education"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
-<div class="cell-output cell-output-stderr">
-<pre><code>Warning in chisq.test(table(df_clust$cluster, df_clust$edu)): Chi-squared
-approximation may be incorrect</code></pre>
-</div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Education</caption>
 <thead>
 <tr class="header">
 <th style="text-align: right;">statistic</th>
@@ -2503,10 +2507,11 @@ approximation may be incorrect</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(chi <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(chi <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)), <span class="at">caption =</span> <span class="st">"Number of children"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Number of children</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">term</th>
@@ -2539,10 +2544,11 @@ approximation may be incorrect</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(adu <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">aov</span>(adu <span class="sc">~</span> cluster, <span class="at">data =</span> df_clust)), <span class="at">caption =</span> <span class="st">"Number of adults"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<caption>Number of adults</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">term</th>
@@ -2574,6 +2580,363 @@ approximation may be incorrect</code></pre>
 </table>
 </div>
 </div>
+</section>
+<section id="risk-perception" class="level4" data-number="5.0.1.2">
+<h4 data-number="5.0.1.2" class="anchored" data-anchor-id="risk-perception"><span class="header-section-number">5.0.1.2</span> Risk perception</h4>
+<p>cluster 3 has a significantly higher risk perception than the other clusters</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>mean_risk <span class="ot">&lt;-</span> subset_expiry <span class="sc">%&gt;%</span> </span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(expiry <span class="sc">==</span> <span class="st">"today"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(cluster) <span class="sc">%&gt;%</span> </span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_per_risk =</span> <span class="fu">mean</span>(per_risk, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean_per_fresh =</span> <span class="fu">mean</span>(per_fresh, <span class="at">na.rm =</span> T),</span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean_man_expiry =</span> <span class="fu">mean</span>(man_expiry, <span class="at">na.rm =</span> T))</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(mean_risk, <span class="fu">aes</span>(<span class="at">x =</span> cluster, <span class="at">y =</span> mean_per_risk, <span class="at">fill =</span> cluster)) <span class="sc">+</span></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>() <span class="sc">+</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="exp2_analysis_files/figure-html/define%20cluster-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>risk_aov <span class="ot">&lt;-</span> <span class="fu">aov</span>(per_risk <span class="sc">~</span> cluster, <span class="at">data =</span> subset_expiry)</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(risk_aov), <span class="at">caption =</span> <span class="st">"ANOVA perceived risk by group"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>ANOVA perceived risk by group</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: right;">df</th>
+<th style="text-align: right;">sumsq</th>
+<th style="text-align: right;">meansq</th>
+<th style="text-align: right;">statistic</th>
+<th style="text-align: right;">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">cluster</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">198.9518</td>
+<td style="text-align: right;">99.475917</td>
+<td style="text-align: right;">23.13878</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Residuals</td>
+<td style="text-align: right;">148</td>
+<td style="text-align: right;">636.2667</td>
+<td style="text-align: right;">4.299099</td>
+<td style="text-align: right;">NA</td>
+<td style="text-align: right;">NA</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">TukeyHSD</span>(risk_aov)), <span class="at">caption =</span> <span class="st">"Post-hoc Tukey comparisons"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Post-hoc Tukey comparisons</caption>
+<colgroup>
+<col style="width: 11%">
+<col style="width: 12%">
+<col style="width: 15%">
+<col style="width: 14%">
+<col style="width: 15%">
+<col style="width: 14%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: left;">contrast</th>
+<th style="text-align: right;">null.value</th>
+<th style="text-align: right;">estimate</th>
+<th style="text-align: right;">conf.low</th>
+<th style="text-align: right;">conf.high</th>
+<th style="text-align: right;">adj.p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">cluster</td>
+<td style="text-align: left;">2-1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.3919256</td>
+<td style="text-align: right;">-0.5075398</td>
+<td style="text-align: right;">1.291391</td>
+<td style="text-align: right;">0.5581543</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">cluster</td>
+<td style="text-align: left;">3-1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3.0151961</td>
+<td style="text-align: right;">1.9392707</td>
+<td style="text-align: right;">4.091121</td>
+<td style="text-align: right;">0.0000000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">cluster</td>
+<td style="text-align: left;">3-2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2.6232704</td>
+<td style="text-align: right;">1.5017048</td>
+<td style="text-align: right;">3.744836</td>
+<td style="text-align: right;">0.0000004</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</section>
+<section id="alternative-k-means-clustering" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="alternative-k-means-clustering"><span class="header-section-number">5.1</span> alternative k-means clustering</h2>
+<p>In k-means clustering, the cluster numbers are the same but they’re otherwise very similar. In this case, cluster 1 is the non-freezing group with the higher perceived risk.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>km <span class="ot">&lt;-</span> <span class="fu">kmeans</span>(pcadf<span class="sc">$</span>ind<span class="sc">$</span>coord, <span class="at">centers =</span> <span class="dv">3</span>)</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>df_clust<span class="sc">$</span>kmclust <span class="ot">&lt;-</span> <span class="fu">factor</span>(km<span class="sc">$</span>cluster)</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>subset_expiry<span class="sc">$</span>kmclust <span class="ot">&lt;-</span> <span class="fu">factor</span>(km<span class="sc">$</span>cluster)</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a><span class="co"># cluster summary</span></span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">aggregate</span>(df_clust[, <span class="fu">c</span>(<span class="st">"lik_1"</span>, <span class="st">"lik_2"</span>, <span class="st">"lik_3"</span>, <span class="st">"lik_4"</span>, <span class="st">"lik_5"</span>)], </span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>          <span class="at">by =</span> <span class="fu">list</span>(<span class="at">cluster =</span> df_clust<span class="sc">$</span>kmclust), <span class="at">FUN =</span> mean), <span class="at">caption =</span> <span class="st">"Mean behaviour likelihood scores by cluster"</span>, <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">"Cluster"</span>, <span class="st">"Freezing"</span>, <span class="st">"Discarding"</span>, <span class="st">"Cooking"</span>, <span class="st">"Fridge"</span>, <span class="st">"Share"</span>), <span class="at">digits =</span> <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Mean behaviour likelihood scores by cluster</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Cluster</th>
+<th style="text-align: right;">Freezing</th>
+<th style="text-align: right;">Discarding</th>
+<th style="text-align: right;">Cooking</th>
+<th style="text-align: right;">Fridge</th>
+<th style="text-align: right;">Share</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: right;">6.86</td>
+<td style="text-align: right;">1.54</td>
+<td style="text-align: right;">2.26</td>
+<td style="text-align: right;">2.06</td>
+<td style="text-align: right;">1.80</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2</td>
+<td style="text-align: right;">5.99</td>
+<td style="text-align: right;">1.79</td>
+<td style="text-align: right;">5.89</td>
+<td style="text-align: right;">3.63</td>
+<td style="text-align: right;">3.16</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3</td>
+<td style="text-align: right;">2.65</td>
+<td style="text-align: right;">4.46</td>
+<td style="text-align: right;">4.38</td>
+<td style="text-align: right;">2.12</td>
+<td style="text-align: right;">3.42</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># cluster sizes</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">table</span>(df_clust<span class="sc">$</span>kmclust), <span class="at">caption =</span> <span class="st">"Cluster sizes"</span>, <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">"Cluster"</span>, <span class="st">"n"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Cluster sizes</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Cluster</th>
+<th style="text-align: right;">n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: right;">35</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2</td>
+<td style="text-align: right;">90</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3</td>
+<td style="text-align: right;">26</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>mean_risk_km <span class="ot">&lt;-</span> subset_expiry <span class="sc">%&gt;%</span> </span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(expiry <span class="sc">==</span> <span class="st">"today"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(kmclust) <span class="sc">%&gt;%</span> </span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_per_risk =</span> <span class="fu">mean</span>(per_risk, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean_per_fresh =</span> <span class="fu">mean</span>(per_fresh, <span class="at">na.rm =</span> T),</span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean_man_expiry =</span> <span class="fu">mean</span>(man_expiry, <span class="at">na.rm =</span> T))</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(mean_risk_km, <span class="fu">aes</span>(<span class="at">x =</span> kmclust, <span class="at">y =</span> mean_per_risk, <span class="at">fill =</span> kmclust)) <span class="sc">+</span></span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>() <span class="sc">+</span></span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="exp2_analysis_files/figure-html/k-means-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>risk_aovkm <span class="ot">&lt;-</span> <span class="fu">aov</span>(per_risk <span class="sc">~</span> kmclust, <span class="at">data =</span> subset_expiry)</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(risk_aov), <span class="at">caption =</span> <span class="st">"ANOVA perceived risk by k-means clusters"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>ANOVA perceived risk by k-means clusters</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: right;">df</th>
+<th style="text-align: right;">sumsq</th>
+<th style="text-align: right;">meansq</th>
+<th style="text-align: right;">statistic</th>
+<th style="text-align: right;">p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">cluster</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">198.9518</td>
+<td style="text-align: right;">99.475917</td>
+<td style="text-align: right;">23.13878</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Residuals</td>
+<td style="text-align: right;">148</td>
+<td style="text-align: right;">636.2667</td>
+<td style="text-align: right;">4.299099</td>
+<td style="text-align: right;">NA</td>
+<td style="text-align: right;">NA</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(<span class="fu">tidy</span>(<span class="fu">TukeyHSD</span>(risk_aovkm)), <span class="at">caption =</span> <span class="st">"post-hoc tukey for k-means clusters"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>post-hoc tukey for k-means clusters</caption>
+<colgroup>
+<col style="width: 11%">
+<col style="width: 12%">
+<col style="width: 15%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">term</th>
+<th style="text-align: left;">contrast</th>
+<th style="text-align: right;">null.value</th>
+<th style="text-align: right;">estimate</th>
+<th style="text-align: right;">conf.low</th>
+<th style="text-align: right;">conf.high</th>
+<th style="text-align: right;">adj.p.value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">kmclust</td>
+<td style="text-align: left;">2-1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.7785714</td>
+<td style="text-align: right;">-0.224096</td>
+<td style="text-align: right;">1.781239</td>
+<td style="text-align: right;">0.1607427</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">kmclust</td>
+<td style="text-align: left;">3-1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3.2093407</td>
+<td style="text-align: right;">1.906170</td>
+<td style="text-align: right;">4.512512</td>
+<td style="text-align: right;">0.0000001</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">kmclust</td>
+<td style="text-align: left;">3-2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2.4307692</td>
+<td style="text-align: right;">1.310098</td>
+<td style="text-align: right;">3.551441</td>
+<td style="text-align: right;">0.0000026</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co"># visualise means by cluster</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>means_data <span class="ot">&lt;-</span> <span class="fu">aggregate</span>(df_clust[, <span class="fu">c</span>(<span class="st">"lik_1"</span>, <span class="st">"lik_2"</span>, <span class="st">"lik_3"</span>, <span class="st">"lik_4"</span>, <span class="st">"lik_5"</span>)], </span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>                       <span class="at">by =</span> <span class="fu">list</span>(<span class="at">cluster =</span> df_clust<span class="sc">$</span>kmclust), <span class="at">FUN =</span> mean)</span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Rename columns for clarity</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(means_data) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"cluster"</span>, <span class="st">"Freezing"</span>, <span class="st">"Discarding"</span>, <span class="st">"Cooking"</span>, <span class="st">"Fridge"</span>, <span class="st">"Share"</span>)</span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Reshape data for ggplot</span></span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a>means_long <span class="ot">&lt;-</span> means_data <span class="sc">%&gt;%</span></span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="sc">-</span>cluster, <span class="at">names_to =</span> <span class="st">"Behavior"</span>, <span class="at">values_to =</span> <span class="st">"Mean_Score"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb54-11"><a href="#cb54-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cluster =</span> <span class="fu">factor</span>(cluster))</span>
+<span id="cb54-12"><a href="#cb54-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-13"><a href="#cb54-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Create the bar plot</span></span>
+<span id="cb54-14"><a href="#cb54-14" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(means_long, <span class="fu">aes</span>(<span class="at">x =</span> Behavior, <span class="at">y =</span> Mean_Score, <span class="at">fill =</span> cluster)) <span class="sc">+</span></span>
+<span id="cb54-15"><a href="#cb54-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">"dodge"</span>) <span class="sc">+</span></span>
+<span id="cb54-16"><a href="#cb54-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Mean Behavior Likelihood Scores by k-means clusters"</span>,</span>
+<span id="cb54-17"><a href="#cb54-17" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Behavior"</span>,</span>
+<span id="cb54-18"><a href="#cb54-18" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Mean Likelihood Score"</span>) <span class="sc">+</span></span>
+<span id="cb54-19"><a href="#cb54-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb54-20"><a href="#cb54-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">angle =</span> <span class="dv">45</span>, <span class="at">hjust =</span> <span class="dv">1</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="exp2_analysis_files/figure-html/k-means-2.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
 </section>
 
 </main>

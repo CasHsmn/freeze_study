@@ -64,6 +64,8 @@ library(psych)
 library(FactoMineR)
 library(factoextra)
 
+set.seed(123)
+
 wd <- list()
 wd$data <-"C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/data/"
 wd$output <- "C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/output/"
@@ -648,13 +650,17 @@ Using Hierarchical Clustering on Principal Components with 3 clusters, which is 
 #| warning: false
 df_clust <- df %>% 
     filter(expiry == "today" ) %>% 
-  select(lik_1:lik_5, edu, gender, inc, chi, adu, age)
+  select(lik_1:lik_5, edu, gender, inc, chi, adu, age, meat_freq, man_expiry)
+
+subset_expiry <- df %>% 
+  filter(expiry  == "today")
 
 pcadf <- FactoMineR::PCA(df_clust[, c("lik_1", "lik_2", "lik_3", "lik_4", "lik_5")])
 hcpcdf <- HCPC(pcadf, nb.clust = 3, graph = F)
 
-df_clust$cluster <- hcpcdf$data.clust$clust
-df_clust$cluster <- factor(df_clust$cluster)
+df_clust$cluster <- factor(hcpcdf$data.clust$clust)
+subset_expiry$cluster <- factor(hcpcdf$data.clust$clust)
+#df[expiry == "today",]$cluster <- hcpcdf$data.clust$clust
 
 fviz_cluster(hcpcdf)
 
@@ -673,10 +679,13 @@ kable(tidy(aov_discardcluster), caption = "ANOVA of discarding likelihood predic
 
 ph_discard <- TukeyHSD(aov_discardcluster)
 kable(tidy(ph_discard), caption = "post hoc Tukey discard likelihood", digits = 2)
+
 ```
 Mainly cluster 3 freezes less and discards more than the other two clusters. 
 
 ### Defining clusters
+
+#### Socio-demographics
 
 I cannot figure out if cluster 3 is a specific targetable group. There are no significant demographics
 ```{r}
@@ -696,6 +705,81 @@ kable(tidy(chisq.test(table(df_clust$cluster, df_clust$edu))), caption = "Educat
 kable(tidy(aov(chi ~ cluster, data = df_clust)), caption = "Number of children")
 kable(tidy(aov(adu ~ cluster, data = df_clust)), caption = "Number of adults")
 ```
+#### Risk perception
+cluster 3 has a significantly higher risk perception than the other clusters
+```{r}
+#| label: define cluster
 
 
+mean_risk <- subset_expiry %>% 
+  filter(expiry == "today") %>% 
+  group_by(cluster) %>% 
+  summarise(mean_per_risk = mean(per_risk, na.rm = TRUE),
+            mean_per_fresh = mean(per_fresh, na.rm = T),
+            mean_man_expiry = mean(man_expiry, na.rm = T))
+
+ggplot(mean_risk, aes(x = cluster, y = mean_per_risk, fill = cluster)) +
+  geom_col() +
+  theme_minimal()
+
+risk_aov <- aov(per_risk ~ cluster, data = subset_expiry)
+kable(tidy(risk_aov), caption = "ANOVA perceived risk by group")
+kable(tidy(TukeyHSD(risk_aov)), caption = "Post-hoc Tukey comparisons")
+```
+## alternative k-means clustering
+In k-means clustering, the cluster numbers are the same but they're otherwise very similar.
+In this case, cluster 1 is the non-freezing group with the higher perceived risk.
+
+
+
+```{r}
+#| label: k-means
+km <- kmeans(pcadf$ind$coord, centers = 3)
+df_clust$kmclust <- factor(km$cluster)
+subset_expiry$kmclust <- factor(km$cluster)
+
+# cluster summary
+kable(aggregate(df_clust[, c("lik_1", "lik_2", "lik_3", "lik_4", "lik_5")], 
+          by = list(cluster = df_clust$kmclust), FUN = mean), caption = "Mean behaviour likelihood scores by cluster", col.names = c("Cluster", "Freezing", "Discarding", "Cooking", "Fridge", "Share"), digits = 2)
+
+# cluster sizes
+kable(table(df_clust$kmclust), caption = "Cluster sizes", col.names = c("Cluster", "n"))
+
+mean_risk_km <- subset_expiry %>% 
+  filter(expiry == "today") %>% 
+  group_by(kmclust) %>% 
+  summarise(mean_per_risk = mean(per_risk, na.rm = TRUE),
+            mean_per_fresh = mean(per_fresh, na.rm = T),
+            mean_man_expiry = mean(man_expiry, na.rm = T))
+
+ggplot(mean_risk_km, aes(x = kmclust, y = mean_per_risk, fill = kmclust)) +
+  geom_col() +
+  theme_minimal()
+
+risk_aovkm <- aov(per_risk ~ kmclust, data = subset_expiry)
+kable(tidy(risk_aov), caption = "ANOVA perceived risk by k-means clusters")
+kable(tidy(TukeyHSD(risk_aovkm)), caption = "post-hoc tukey for k-means clusters")
+
+# visualise means by cluster
+means_data <- aggregate(df_clust[, c("lik_1", "lik_2", "lik_3", "lik_4", "lik_5")], 
+                       by = list(cluster = df_clust$kmclust), FUN = mean)
+
+# Rename columns for clarity
+colnames(means_data) <- c("cluster", "Freezing", "Discarding", "Cooking", "Fridge", "Share")
+
+# Reshape data for ggplot
+means_long <- means_data %>%
+  pivot_longer(cols = -cluster, names_to = "Behavior", values_to = "Mean_Score") %>%
+  mutate(cluster = factor(cluster))
+
+# Create the bar plot
+ggplot(means_long, aes(x = Behavior, y = Mean_Score, fill = cluster)) +
+  geom_col(position = "dodge") +
+  labs(title = "Mean Behavior Likelihood Scores by k-means clusters",
+       x = "Behavior",
+       y = "Mean Likelihood Score") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
 
