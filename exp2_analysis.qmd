@@ -782,4 +782,96 @@ ggplot(means_long, aes(x = Behavior, y = Mean_Score, fill = cluster)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
+# Experiment 2
+This version of the experiment had a simplified design, where participants had to choose between freezing and discarding the meat.
 
+```{r}
+wd <- list()
+wd$data <-"C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/data/"
+wd$output <- "C:/Users/huism080/OneDrive - Wageningen University & Research/Research/Study4/output/"
+
+exp2 <- fread(paste0(wd$data, "freeze_exp2_final.csv")) # load value data
+
+df2 <- exp2 %>% 
+  filter(Status == 0 & Finished == 1 & att_check == 2) %>% 
+  mutate(across(11:38,as.numeric),
+         man_expiry = man_expiry - 5) %>% 
+  rowid_to_column(var = "id")
+
+df2 <- df2 %>%
+  mutate(
+    st_per_risk = rowMeans(cbind(st_per_risk1_1, st_per_risk2_1), na.rm = TRUE),
+    f3_per_risk = rowMeans(cbind(f3_per_risk1_1, f3_per_risk2_1), na.rm = TRUE),
+    s3_per_risk = rowMeans(cbind(s3_per_risk1_1, s3_per_risk2_1), na.rm = TRUE),
+    ft_per_risk = rowMeans(cbind(ft_per_risk1_1, ft_per_risk2_1), na.rm = TRUE),
+    per_risk = coalesce(st_per_risk, f3_per_risk, s3_per_risk, ft_per_risk),
+    per_fresh = coalesce(st_per_fresh, f3_per_fresh, s3_per_fresh, ft_per_fresh)
+  )
+
+df_long <- df2 %>%
+  pivot_longer(
+    cols = c(st_beh_1, s3_beh_1, ft_beh_1, f3_beh_1), # your DV columns
+    names_to = "condition",                           # new column indicating condition
+    values_to = "beh_lik"                             # DV scores here
+  ) %>%
+  mutate(
+    # If expiry/location vary by condition, map these from condition names or have separate columns to join
+    expiry = recode(condition,
+                    "st_beh_1" = 0,
+                    "s3_beh_1" = 1,
+                    "ft_beh_1" = 0,
+                    "f3_beh_1" = 1),
+    location = recode(condition,
+                    "st_beh_1" = 0,
+                    "s3_beh_1" = 0,
+                    "ft_beh_1" = 1,
+                    "f3_beh_1" = 1),
+    expiry = factor(expiry, labels = c("today", "5 days")),
+    location = factor(location, labels = c("shop", "fridge"))
+  ) %>% 
+  select(id, expiry, location, beh_lik, per_risk, per_fresh)
+
+
+```
+
+## sample
+```{r}
+#| label: sample experiment 2
+
+df2 <- df2 %>% 
+  mutate(
+    age = as.numeric(age),
+    adu = as.numeric(adu),
+    chi = as.numeric(chi),
+    inc = factor(inc, levels = c(1:10), labels = c("Less than $10,000", "$10,000 - $29,999", "$30,000 - $49,999", "$50,000 - $69,999", "$70,000 - $89,999", "$90,000 - $99,999", "$100,000 - $124,999", "$125,000 - $149,999", "$150,000 - $199,999", "$200,000 or more")),
+    edu = factor(edu, levels = c(1:9), labels = c("No formal education", "Less than a high school diploma", "High school graduate or equivalent (i.e. GED)", "Some college, but no degree", "Associate degree (i.e. AA, AS)", "Bachelor's degree (i.e. BA, AB, BS)", "Master's degree (i.e. MA, MS, MEng, etc.)", "Professional degree (i.e. MD, DDS, DVM, LLB, JD)", "Doctorate degree (i.e. PhD, EdD)")),
+    gender = factor(gender, levels = c(1:4), labels = c("male", "female", "non-binary", "prefer not to say"))
+  )
+table1(~ gender + age + adu + chi + edu + inc, data = df2)
+```
+## descriptives
+```{r}
+df_long %>%
+  mutate(expiry_location = paste(expiry, location, sep = "_")) %>%
+  group_by(expiry_location) %>%
+  summarise(mean_beh_lik = mean(beh_lik, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = expiry_location, y = mean_beh_lik, fill = expiry_location)) +
+  geom_col() +
+  theme_minimal()
+```
+## ANOVA
+```{r}
+aovtest <- aov(beh_lik ~ expiry*location, data = df_long)
+summary(aovtest)
+
+med <- aov(beh_lik ~ expiry*location*per_risk, data = df_long)
+summary(med)
+
+em <- emmeans(aovtest, ~ expiry * location)
+summary(em)
+ggplot(as.data.frame(em), aes(x = expiry, y = emmean, color = location, group = location)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width=0.2)+
+  theme_minimal()
+```
