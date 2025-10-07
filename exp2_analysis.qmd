@@ -63,6 +63,7 @@ library(dplyr)
 library(psych)
 library(FactoMineR)
 library(factoextra)
+library(tidyverse)
 
 set.seed(123)
 
@@ -793,45 +794,49 @@ wd$output <- "C:/Users/huism080/OneDrive - Wageningen University & Research/Rese
 exp2 <- fread(paste0(wd$data, "freeze_exp2_final.csv")) # load value data
 
 df2 <- exp2 %>% 
-  filter(Status == 0 & Finished == 1 & att_check == 2) %>% 
-  mutate(across(11:38,as.numeric),
+  filter(Status == 0, Finished == 1, att_check == 2) %>% 
+  mutate(across(11:38, as.numeric),
          man_expiry = man_expiry - 5) %>% 
   rowid_to_column(var = "id")
 
+# Step 2: Calculate averaged per_risk for each condition
 df2 <- df2 %>%
   mutate(
     st_per_risk = rowMeans(cbind(st_per_risk1_1, st_per_risk2_1), na.rm = TRUE),
-    f3_per_risk = rowMeans(cbind(f3_per_risk1_1, f3_per_risk2_1), na.rm = TRUE),
     s3_per_risk = rowMeans(cbind(s3_per_risk1_1, s3_per_risk2_1), na.rm = TRUE),
     ft_per_risk = rowMeans(cbind(ft_per_risk1_1, ft_per_risk2_1), na.rm = TRUE),
-    per_risk = coalesce(st_per_risk, f3_per_risk, s3_per_risk, ft_per_risk),
-    per_fresh = coalesce(st_per_fresh, f3_per_fresh, s3_per_fresh, ft_per_fresh)
+    f3_per_risk = rowMeans(cbind(f3_per_risk1_1, f3_per_risk2_1), na.rm = TRUE)
   )
 
-df_long <- df2 %>%
+# Step 3: Pivot behavior variables to long format
+beh_long <- df2 %>%
   pivot_longer(
-    cols = c(st_beh_1, s3_beh_1, ft_beh_1, f3_beh_1), # your DV columns
-    names_to = "condition",                           # new column indicating condition
-    values_to = "beh_lik"                             # DV scores here
+    cols = c(st_beh_1, s3_beh_1, ft_beh_1, f3_beh_1),
+    names_to = "condition",
+    values_to = "beh_1"
   ) %>%
+  mutate(condition = str_replace(condition, "_beh_1$", ""))  # Extract condition prefix (st, s3, ft, f3)
+
+# Step 4: Pivot per_risk variables to long format
+risk_long <- df2 %>%
+  pivot_longer(
+    cols = c(st_per_risk, s3_per_risk, ft_per_risk, f3_per_risk),
+    names_to = "condition",
+    values_to = "per_risk"
+  ) %>%
+  mutate(condition = str_replace(condition, "_per_risk$", ""))  # Extract condition prefix
+
+# Step 5: Join behavior and per_risk data by id and condition
+df_long <- beh_long %>%
+  left_join(risk_long, by = c("id", "condition")) %>%
   mutate(
-    # If expiry/location vary by condition, map these from condition names or have separate columns to join
-    expiry = recode(condition,
-                    "st_beh_1" = 0,
-                    "s3_beh_1" = 1,
-                    "ft_beh_1" = 0,
-                    "f3_beh_1" = 1),
-    location = recode(condition,
-                    "st_beh_1" = 0,
-                    "s3_beh_1" = 0,
-                    "ft_beh_1" = 1,
-                    "f3_beh_1" = 1),
+    expiry = recode(condition, "st" = 0, "s3" = 1, "ft" = 0, "f3" = 1),
+    location = recode(condition, "st" = 0, "s3" = 0, "ft" = 1, "f3" = 1),
     expiry = factor(expiry, labels = c("today", "5 days")),
-    location = factor(location, labels = c("shop", "fridge"))
-  ) %>% 
-  select(id, expiry, location, beh_lik, per_risk, per_fresh)
-
-
+    location = factor(location, labels = c("shop", "fridge")),
+    c_risk = per_risk - mean(per_risk, na.rm = TRUE)
+  ) %>%
+  select(id, expiry, location, beh_1, per_risk, c_risk)
 ```
 
 ## sample
@@ -850,28 +855,222 @@ df2 <- df2 %>%
 table1(~ gender + age + adu + chi + edu + inc, data = df2)
 ```
 ## descriptives
+Still very little variety, though in this setup there is also quite clearly one correct answer, to freeze. Even then, there is still a difference between the expiration groups. Though people in both groups are very likely to freeze, so I am not sure if this difference would actually lead to any real differences in behaviour.
 ```{r}
 df_long %>%
   mutate(expiry_location = paste(expiry, location, sep = "_")) %>%
   group_by(expiry_location) %>%
-  summarise(mean_beh_lik = mean(beh_lik, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(x = expiry_location, y = mean_beh_lik, fill = expiry_location)) +
+  summarise(mean_beh_1 = mean(beh_1, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = expiry_location, y = mean_beh_1, fill = expiry_location)) +
   geom_col() +
+  scale_y_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+hist(df_long$beh_1)
+```
+## Inferential
+```{r}
+# location and expiry only
+options(contrasts = c("contr.sum", "contr.poly"))
+mmFreeze <- lme4::lmer(beh_1 ~ expiry * location + (1|id), data = df_long)
+Anova(mmFreeze, test = "F", type = "3")
+
+emFreeze <- emmeans(mmFreeze, pairwise ~ expiry * location)
+
+# perceived risk effect
+# path a
+med_a <- lmer(per_risk ~ expiry * location + (1|id), data = df_long)
+Anova(med_a, test = "F", type = 3)
+
+# full model
+med_full <- lmer(beh_1 ~ expiry * location + c_risk + (1|id), data = df_long)
+Anova(med_full, test = "F", type = 3)
+summary(med_full)
+
+emFull <- emmeans(med_full, ~ expiry * c_risk)
+
+#em <- emmeans(med, ~ expiry * per_risk)
+#summary(em)
+# ggplot(as.data.frame(em), aes(x = expiry, y = emmean, color = location, group = location)) +
+#   geom_point(size = 3) +
+#   geom_line() +
+#   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width=0.2)+
+#   theme_minimal()
+
+#emmip(em, ~ expiry * per_risk)
+
+# mediation
+mediator_model <- lme4::lmer(c_risk ~ expiry * location + (1|id), data = df_long)
+outcome_model <- lme4::lmer(beh_1 ~ expiry * location + c_risk + (1|id), data = df_long)
+med_results <- mediation::mediate(mediator_model, outcome_model, treat = "expiry", control.value = "today", treat.value = "5 days",mediator = "c_risk", sims = 1000)
+
+summary(med_results)
+```
+
+
+```{r}
+#| eval: false
+#| include: false
+# chatgpt interactions package stuff to visualise
+library(tidyverse)
+
+# Calculate mean and SD
+mean_pr <- mean(df_long$per_risk, na.rm = TRUE)
+sd_pr <- sd(df_long$per_risk, na.rm = TRUE)
+
+# Create prediction grid
+pred_data <- expand.grid(
+  expiry = unique(df_long$expiry),
+  location = unique(df_long$location),
+  per_risk = c(mean_pr - sd_pr, mean_pr, mean_pr + sd_pr),
+  id = NA  # Set to average participant
+)
+
+# Get predictions
+pred_data$predicted_beh <- predict(outcome_model, newdata = pred_data, re.form = NA)
+
+# Add labels
+pred_data$per_risk_level <- factor(
+  ifelse(pred_data$per_risk == mean_pr - sd_pr, "-1 SD",
+         ifelse(pred_data$per_risk == mean_pr, "Mean", "+1 SD")),
+  levels = c("-1 SD", "Mean", "+1 SD")
+)
+
+# Plot
+ggplot(pred_data, aes(x = expiry, y = predicted_beh, color = location, group = location)) +
+  geom_point(linewidth = 3) +
+  geom_line() +
+  facet_wrap(~ per_risk_level) +
+  labs(
+    title = "Predicted beh_1 by Expiry and Location at Different Levels of per_risk",
+    x = "Expiry",
+    y = "Predicted beh_1",
+    color = "Location"
+  ) +
+  theme_minimal()
+
+
+
+mean_pr <- mean(df_long$per_risk, na.rm = TRUE)
+sd_pr <- sd(df_long$per_risk, na.rm = TRUE)
+
+# Create prediction grid
+pred_data <- expand.grid(
+  expiry = unique(df_long$expiry),
+  location = unique(df_long$location),
+  per_risk = c(mean_pr - sd_pr, mean_pr + sd_pr)
+)
+
+pred_data$c_risk <- pred_data$per_risk - mean_pr
+pred_data$predicted_beh <- predict(med_full, newdata = pred_data, re.form = NA)
+
+pred_data$per_risk_level <- factor(
+  ifelse(pred_data$per_risk == mean_pr - sd_pr, "Low per_risk (-1 SD)", "High per_risk (+1 SD)"),
+  levels = c("Low per_risk (-1 SD)", "High per_risk (+1 SD)")
+)
+
+# Plot
+ggplot(pred_data, aes(x = per_risk_level, y = predicted_beh, color = expiry, group = expiry)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
   theme_minimal()
 ```
-## ANOVA
 ```{r}
-aovtest <- aov(beh_lik ~ expiry*location, data = df_long)
-summary(aovtest)
+df_long <- df_long %>%
+  mutate(per_risk_c = per_risk - mean(per_risk, na.rm = TRUE))
 
-med <- aov(beh_lik ~ expiry*location*per_risk, data = df_long)
-summary(med)
 
-em <- emmeans(aovtest, ~ expiry * location)
-summary(em)
-ggplot(as.data.frame(em), aes(x = expiry, y = emmean, color = location, group = location)) +
+outcome_model <- lmer(beh_1 ~ expiry * per_risk + (1|id), data = df_long)
+
+# Calculate mean and SD of per_risk
+mean_pr <- mean(df_long$per_risk, na.rm = TRUE)
+sd_pr <- sd(df_long$per_risk, na.rm = TRUE)
+
+# Create prediction data with per_risk levels and expiry conditions
+pred_data <- expand.grid(
+  per_risk = c(mean_pr - sd_pr, mean_pr, mean_pr + sd_pr),
+  expiry = unique(df_long$expiry)
+)
+
+# Predict beh_1 at these values (population-level: no random effects)
+pred_data$predicted_beh <- predict(outcome_model, newdata = pred_data, re.form = NA)
+
+# Label per_risk levels for plotting
+pred_data$per_risk_level <- factor(
+  round(pred_data$per_risk, 2),
+  levels = round(c(mean_pr - sd_pr, mean_pr, mean_pr + sd_pr), 2),
+  labels = c("-1 SD", "Mean", "+1 SD")
+)
+
+# Plot
+ggplot(pred_data, aes(x = per_risk_level, y = predicted_beh, color = expiry, group = expiry)) +
+  geom_line(size = 1) +
   geom_point(size = 3) +
-  geom_line() +
-  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width=0.2)+
+  labs(
+    title = "Predicted beh_1 by Perceived Risk and Expiry",
+    x = "Perceived Risk",
+    y = "Predicted beh_1",
+    color = "Expiry"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: analyse within-subject variability
+
+within_person_variance <- df_long %>%
+  group_by(id) %>%
+  summarise(
+    mean_per_risk = mean(per_risk, na.rm = TRUE),
+    sd_per_risk = sd(per_risk, na.rm = TRUE),
+    range_per_risk = max(per_risk, na.rm = TRUE) - min(per_risk, na.rm = TRUE),
+    n_conditions = n()
+  ) %>%
+  ungroup()
+
+# Summary statistics
+summary(within_person_variance$sd_per_risk)
+summary(within_person_variance$range_per_risk)
+
+# Visualize distribution of within-person SD
+ggplot(within_person_variance, aes(x = sd_per_risk)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(
+    title = "Distribution of Within-Person Variability in Perceived Risk",
+    subtitle = "Red line indicates SD = 1 (low variability threshold)",
+    x = "Standard Deviation of per_risk within person",
+    y = "Count of Participants"
+  ) +
+  theme_minimal()
+
+# Visualize distribution of within-person range
+ggplot(within_person_variance, aes(x = range_per_risk)) +
+  geom_histogram(bins = 20, fill = "darkorange", color = "black") +
+  labs(
+    title = "Distribution of Within-Person Range in Perceived Risk",
+    subtitle = "Red line indicates range = 2 (low variability threshold)",
+    x = "Range of per_risk within person (max - min)",
+    y = "Count of Participants"
+  ) +
+  theme_minimal()
+
+
+df_long %>%
+  group_by(expiry, location) %>%
+  summarise(
+    mean_risk = mean(per_risk, na.rm = TRUE),
+    sd_risk = sd(per_risk, na.rm = TRUE),
+    n = n()
+  )
+
+# Visualization
+ggplot(df_long, aes(x = interaction(expiry, location), y = per_risk, fill = expiry)) +
+  geom_boxplot() +
+  labs(
+    title = "Perceived Risk by Condition",
+    x = "Condition (Expiry × Location)",
+    y = "Perceived Risk"
+  ) +
   theme_minimal()
 ```
